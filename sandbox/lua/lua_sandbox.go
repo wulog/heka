@@ -16,6 +16,7 @@ package lua
 
 import "C"
 import (
+	"context"
 	"errors"
 	"fmt"
 	lua "github.com/yuin/gopher-lua"
@@ -643,9 +644,11 @@ func go_lua_inject_message(ptr unsafe.Pointer, payload *C.char,
 	return lsb.injectMessage(C.GoStringN(payload, payload_len),
 		C.GoString(payload_type), C.GoString(payload_name))
 }
+
 //todo lua pool
 type LuaSandbox struct {
-	lsp           *lua.LState
+	lvm           *lua.LState
+	lcancel       context.CancelFunc
 	pack          *pipeline.PipelinePack
 	injectMessage func(payload, payload_type, payload_name string) int
 	config        map[string]interface{}
@@ -653,6 +656,7 @@ type LuaSandbox struct {
 	messageCopied bool
 	globals       *pipeline.GlobalConfigStruct
 	sbConfig      *sandbox.SandboxConfig
+	lerr          error
 }
 
 // 初始化lua虚拟机
@@ -685,9 +689,12 @@ func CreateLuaSandbox(conf *sandbox.SandboxConfig) (sandbox.Sandbox, error) {
 	//	conf.OutputLimit,
 	//	strings.Join(lua_path, ";"),
 	//	strings.Join(lua_cpath, ";"))
-	lsb.lsp = lua.NewState()
+	lsb.lvm = lua.NewState()
+	ctx, cancel := context.WithCancel(context.Background())
+	lsb.lcancel = cancel
+	lsb.lvm.SetContext(ctx)
 
-	if lsb.lsp == nil {
+	if lsb.lvm == nil {
 		return nil, fmt.Errorf("Sandbox creation failed")
 	}
 	lsb.injectMessage = func(p, pt, pn string) int {
@@ -708,30 +715,50 @@ func (this *LuaSandbox) Init(dataFile string) error {
 func (this *LuaSandbox) Stop() {
 	//todo : save data file
 	//todo : close lua state
-	//sandbox_stop(this.lsp)
-	this.lsp.Close()
+	//sandbox_stop(this.lvm)
+	this.lcancel()
 
 }
 
 func (this *LuaSandbox) Destroy(dataFile string) error {
 	//todo : save data file
 	//todo : close lua state
-	this.lsp.Close()
+	//todo : hook
+	this.lvm.Close()
 
-	lua_sethook(lua, lstop, LUA_MASKCALL | LUA_MASKRET | LUA_MASKCOUNT, 1);
+	//lua_sethook(lua, lstop, LUA_MASKCALL|LUA_MASKRET|LUA_MASKCOUNT, 1)
 	return nil
 }
 
+/*
+LSB_UNKNOWN     = 0,
+LSB_RUNNING     = 1,
+LSB_TERMINATED  = 2,
+LSB_STOP        = 3
+*/
 func (this *LuaSandbox) Status() int {
-	return int(lsb_get_state(this.lsp))
+	status := this.lvm.Status(this.lvm)
+	switch status {
+	case "running":
+		return 1
+	case "suspended":
+		return 2
+	case "dead":
+		return 3
+	case "normal":
+		return 4
+	}
+	return 0
 }
 
 func (this *LuaSandbox) LastError() string {
-	return C.GoString(C.lsb_get_error(this.lsp))
+	return this.lerr.Error()
 }
 
 func (this *LuaSandbox) Usage(utype, ustat int) uint {
-	return uint(C.lsb_usage(this.lsp, C.lsb_usage_type(utype),
+	//todo
+	return 0
+	return uint(C.lsb_usage(this.lvm, C.lsb_usage_type(utype),
 		C.lsb_usage_stat(ustat)))
 }
 
@@ -739,13 +766,13 @@ func (this *LuaSandbox) ProcessMessage(pack *pipeline.PipelinePack) int {
 	this.field = 0
 	this.messageCopied = false
 	this.pack = pack
-	r := int(C.process_message(this.lsp))
+	r := int(C.process_message(this.lvm))
 	this.pack = nil
 	return r
 }
 
 func (this *LuaSandbox) TimerEvent(ns int64) int {
-	return int(C.timer_event(this.lsp, C.longlong(ns)))
+	return int(C.timer_event(this.lvm, C.longlong(ns)))
 }
 
 func (this *LuaSandbox) InjectMessage(f func(payload, payload_type,

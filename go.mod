@@ -17,6 +17,7 @@ require (
 	github.com/rafrombrc/gomock v0.0.0-20150113192118-bcaa96eba53b
 	github.com/rafrombrc/gospec v0.0.0-20121213232506-2e46585948f4
 	github.com/rafrombrc/whisper-go v0.0.0-20130813185214-89e9ba3b5c6a
+	github.com/satori/go.uuid v1.2.0
 	github.com/streadway/amqp v1.0.0
 	github.com/thoj/go-ircevent v0.0.0-20210723090443-73e444401d64
 	github.com/yuin/gopher-lua v0.0.0-20210529063254-f4c35e4016d9

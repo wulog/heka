@@ -15,32 +15,23 @@
  * limitations under the License.
  * </p>
  */
-package sandbox
+package lua
 
 import (
 	"encoding/json"
+	"heka/util/byteutil"
+	"heka/util/stringutil"
 	"sync"
 
 	luaJson "github.com/layeh/gopher-json"
-	"github.com/siddontang/go-mysql/canal"
 	"github.com/yuin/gopher-lua"
 
-	"go-mysql-transfer/util/byteutil"
-	"go-mysql-transfer/util/httpclient"
-	"go-mysql-transfer/util/stringutil"
 )
 
-const (
-	_globalRET = "___RET___"
-	_globalROW = "___ROW___"
-	_globalACT = "___ACT___"
-)
 
 var (
 	_pool *luaStatePool
-	_ds   *canal.Canal
 
-	_httpClient *httpclient.HttpClient
 )
 
 type luaStatePool struct {
@@ -48,19 +39,13 @@ type luaStatePool struct {
 	saved []*lua.LState
 }
 
-func InitActuator(ds *canal.Canal) {
-	_ds = ds
+func InitLuaStatePool() {
 	_pool = &luaStatePool{
 		saved: make([]*lua.LState, 0, 3),
 	}
 }
 
 func (p *luaStatePool) Get() *lua.LState {
-	wj596, 10
-	months
-ago: • v1
-	.0
-	.3
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -74,20 +59,13 @@ ago: • v1
 }
 
 func (p *luaStatePool) New() *lua.LState {
-	_httpClient = httpclient.NewClient()
 
 	L := lua.NewState()
 
 	luaJson.Preload(L)
 
-	L.PreloadModule("scriptOps", scriptModule)
-	L.PreloadModule("dbOps", dbModule)
-	L.PreloadModule("httpOps", httpModule)
+	//L.PreloadModule("scriptOps", scriptModule)
 
-	L.PreloadModule("redisOps", redisModule)
-	L.PreloadModule("mqOps", mqModule)
-	L.PreloadModule("mongodbOps", mongoModule)
-	L.PreloadModule("esOps", esModule)
 
 	return L
 }
@@ -105,17 +83,8 @@ func (p *luaStatePool) Shutdown() {
 	}
 }
 
-func rawRow(L *lua.LState) int {
-	row := L.GetGlobal(_globalROW)
-	L.Push(row)
-	return 1
-}
 
-func rawAction(L *lua.LState) int {
-	act := L.GetGlobal(_globalACT)
-	L.Push(act)
-	return 1
-}
+
 
 func paddingTable(l *lua.LState, table *lua.LTable, kv map[string]interface{}) {
 	for k, v := range kv {
@@ -299,34 +268,24 @@ func interfaceToLv(v interface{}) lua.LValue {
 }
 
 
-func scriptModule(L *lua.LState) int {
-	t := L.NewTable()
-	L.SetFuncs(t, _scriptModuleApi)
-	L.Push(t)
-	return 1
-}
 
-var _scriptModuleApi = map[string]lua.LGFunction{
-	"rawRow":    rawRow,
-	"rawAction": rawAction,
-}
 
-func DoScript(input map[string]interface{}, action string, rule *global.Rule) error {
-	L := _pool.Get()
-	defer _pool.Put(L)
-
-	row := L.NewTable()
-	paddingTable(L, row, input)
-
-	L.SetGlobal(_globalROW, row)
-	L.SetGlobal(_globalACT, lua.LString(action))
-
-	funcFromProto := L.NewFunctionFromProto(rule.LuaProto)
-	L.Push(funcFromProto)
-	err := L.PCall(0, lua.MultRet, nil)
-	if err != nil {
-		return err
-	}
+func DoScript(input map[string]interface{}, action string) error {
+	//L := _pool.Get()
+	//defer _pool.Put(L)
+	//
+	//row := L.NewTable()
+	//paddingTable(L, row, input)
+	//
+	//L.SetGlobal(_globalROW, row)
+	//L.SetGlobal(_globalACT, lua.LString(action))
+	//
+	//funcFromProto := L.NewFunctionFromProto(rule.LuaProto)
+	//L.Push(funcFromProto)
+	//err := L.PCall(0, lua.MultRet, nil)
+	//if err != nil {
+	//	return err
+	//}
 
 	return nil
 }

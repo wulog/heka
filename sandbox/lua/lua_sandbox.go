@@ -14,19 +14,11 @@
 # ***** END LICENSE BLOCK *****/
 package lua
 
-/*
-#cgo CFLAGS: -std=gnu99 -I /opt/gopath/gologstash/build/heka/include
-#cgo LDFLAGS: -Wl,-rpath,$ORIGIN/../lib /opt/gopath/gologstash/build/heka/lib/libluasandbox.so /opt/gopath/gologstash/build/heka/lib/libluasb.so -ldl -lm
-#include <stdlib.h>
-#include <luasandbox.h>
-#include <luasandbox_output.h>
-#include "lua_sandbox_interface.h"
-*/
 import "C"
-
 import (
 	"errors"
 	"fmt"
+	lua "github.com/yuin/gopher-lua"
 	"log"
 	"path/filepath"
 	"strconv"
@@ -34,10 +26,10 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/pborman/uuid"
 	"heka/message"
 	"heka/pipeline"
 	"heka/sandbox"
-	"github.com/pborman/uuid"
 )
 
 const SandboxIoTemplate = `{
@@ -651,9 +643,9 @@ func go_lua_inject_message(ptr unsafe.Pointer, payload *C.char,
 	return lsb.injectMessage(C.GoStringN(payload, payload_len),
 		C.GoString(payload_type), C.GoString(payload_name))
 }
-
+//todo lua pool
 type LuaSandbox struct {
-	lsb           *C.lua_sandbox
+	lsp           *lua.LState
 	pack          *pipeline.PipelinePack
 	injectMessage func(payload, payload_type, payload_name string) int
 	config        map[string]interface{}
@@ -663,6 +655,7 @@ type LuaSandbox struct {
 	sbConfig      *sandbox.SandboxConfig
 }
 
+// 初始化lua虚拟机
 func CreateLuaSandbox(conf *sandbox.SandboxConfig) (sandbox.Sandbox, error) {
 	var (
 		lua_path, lua_cpath []string
@@ -684,19 +677,17 @@ func CreateLuaSandbox(conf *sandbox.SandboxConfig) (sandbox.Sandbox, error) {
 	} else {
 		template = SandboxTemplate
 	}
+	//todo 支持lua脚本的路径加载配置
 
-	cfg := fmt.Sprintf(template,
-		conf.MemoryLimit,
-		conf.InstructionLimit,
-		conf.OutputLimit,
-		strings.Join(lua_path, ";"),
-		strings.Join(lua_cpath, ";"))
-	ccfg := C.CString(cfg)
-	defer C.free(unsafe.Pointer(ccfg))
+	//cfg := fmt.Sprintf(template,
+	//	conf.MemoryLimit,
+	//	conf.InstructionLimit,
+	//	conf.OutputLimit,
+	//	strings.Join(lua_path, ";"),
+	//	strings.Join(lua_cpath, ";"))
+	lsb.lsp = lua.NewState()
 
-	lsb.lsb = C.lsb_create_custom(unsafe.Pointer(lsb), cs, ccfg)
-
-	if lsb.lsb == nil {
+	if lsb.lsp == nil {
 		return nil, fmt.Errorf("Sandbox creation failed")
 	}
 	lsb.injectMessage = func(p, pt, pn string) int {
@@ -709,46 +700,38 @@ func CreateLuaSandbox(conf *sandbox.SandboxConfig) (sandbox.Sandbox, error) {
 }
 
 func (this *LuaSandbox) Init(dataFile string) error {
-	csDataFile := C.CString(dataFile)
-	csPluginType := C.CString(this.sbConfig.PluginType)
-	defer func() {
-		C.free(unsafe.Pointer(csDataFile))
-		C.free(unsafe.Pointer(csPluginType))
-	}()
-	r := int(C.sandbox_init(this.lsb, csDataFile, csPluginType))
-	if r != 0 {
-		return fmt.Errorf("Init() %s", this.LastError())
-	}
+	//todo : load data file
+
 	return nil
 }
 
 func (this *LuaSandbox) Stop() {
-	C.sandbox_stop(this.lsb)
+	//todo : save data file
+	//todo : close lua state
+	//sandbox_stop(this.lsp)
+	this.lsp.Close()
+
 }
 
 func (this *LuaSandbox) Destroy(dataFile string) error {
-	cs := C.CString(dataFile)
-	defer C.free(unsafe.Pointer(cs))
-	c := C.lsb_destroy(this.lsb, cs)
-	this.lsb = nil
-	if c != nil {
-		err := C.GoString(c)
-		C.free(unsafe.Pointer(c))
-		return fmt.Errorf("Destroy() %s", err)
-	}
+	//todo : save data file
+	//todo : close lua state
+	this.lsp.Close()
+
+	lua_sethook(lua, lstop, LUA_MASKCALL | LUA_MASKRET | LUA_MASKCOUNT, 1);
 	return nil
 }
 
 func (this *LuaSandbox) Status() int {
-	return int(C.lsb_get_state(this.lsb))
+	return int(lsb_get_state(this.lsp))
 }
 
 func (this *LuaSandbox) LastError() string {
-	return C.GoString(C.lsb_get_error(this.lsb))
+	return C.GoString(C.lsb_get_error(this.lsp))
 }
 
 func (this *LuaSandbox) Usage(utype, ustat int) uint {
-	return uint(C.lsb_usage(this.lsb, C.lsb_usage_type(utype),
+	return uint(C.lsb_usage(this.lsp, C.lsb_usage_type(utype),
 		C.lsb_usage_stat(ustat)))
 }
 
@@ -756,13 +739,13 @@ func (this *LuaSandbox) ProcessMessage(pack *pipeline.PipelinePack) int {
 	this.field = 0
 	this.messageCopied = false
 	this.pack = pack
-	r := int(C.process_message(this.lsb))
+	r := int(C.process_message(this.lsp))
 	this.pack = nil
 	return r
 }
 
 func (this *LuaSandbox) TimerEvent(ns int64) int {
-	return int(C.timer_event(this.lsb, C.longlong(ns)))
+	return int(C.timer_event(this.lsp, C.longlong(ns)))
 }
 
 func (this *LuaSandbox) InjectMessage(f func(payload, payload_type,

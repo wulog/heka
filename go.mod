@@ -10,6 +10,7 @@ require (
 	github.com/crankycoder/xmlpath v0.0.0-20130917154930-670b185b686f
 	github.com/fsouza/go-dockerclient v1.7.4
 	github.com/gogo/protobuf v1.3.2
+	github.com/layeh/gopher-json v0.0.0-20201124131017-552bb3c4c3bf
 	github.com/orfjackal/nanospec.go v0.0.0-20120727230329-de4694c1d701 // indirect
 	github.com/pborman/uuid v1.2.1
 	github.com/rafrombrc/go-notify v0.0.0-20130215201805-e3ddb616eea9
@@ -18,6 +19,7 @@ require (
 	github.com/rafrombrc/whisper-go v0.0.0-20130813185214-89e9ba3b5c6a
 	github.com/streadway/amqp v1.0.0
 	github.com/thoj/go-ircevent v0.0.0-20210723090443-73e444401d64
+	github.com/yuin/gopher-lua v0.0.0-20210529063254-f4c35e4016d9
 	launchpad.net/gocheck v0.0.0-20140225173054-000000000087 // indirect
 	launchpad.net/xmlpath v0.0.0-20130614043138-000000000004 // indirect
 

@@ -22,11 +22,11 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/pborman/uuid"
 	"heka/message"
 	"heka/pipeline"
 	. "heka/sandbox"
 	"heka/sandbox/lua"
-	"github.com/pborman/uuid"
 )
 
 func TestCreation(t *testing.T) {
@@ -975,7 +975,7 @@ func TestGraphiteHelpers(t *testing.T) {
 		message.NewIntField(pack.Message, "request_time", 15*i, "request_time")
 		r := sb.ProcessMessage(pack)
 		if r != 0 {
-			t.Errorf("Graphite returned %s", r)
+			t.Errorf("Graphite returned %d", r)
 		}
 	}
 

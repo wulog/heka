@@ -8,6 +8,8 @@ require (
 	github.com/abh/geoip v0.0.0-20160510155516-07cea4480daa
 	github.com/cactus/gostrftime v1.0.1
 	github.com/crankycoder/xmlpath v0.0.0-20130917154930-670b185b686f
+	github.com/d5/tengo v1.24.8
+	github.com/d5/tengo/v2 v2.10.0 // indirect
 	github.com/fsouza/go-dockerclient v1.7.4
 	github.com/gogo/protobuf v1.3.2
 	github.com/layeh/gopher-json v0.0.0-20201124131017-552bb3c4c3bf

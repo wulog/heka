@@ -18,9 +18,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	lua "github.com/yuin/gopher-lua"
+	"github.com/d5/tengo/v2"
 	"log"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -55,7 +54,7 @@ os = {'getenv','execute','exit','remove','rename','setlocale','tmpname'}
 disable_modules = {io = 1}
 }`
 
-func extractLuaFieldName(wrapped string) (fn string, found bool) {
+func extractTengoFieldName(wrapped string) (fn string, found bool) {
 	if l := len(wrapped); l > 0 && wrapped[l-1] == ']' {
 		if strings.HasPrefix(wrapped, "Fields[") {
 			fn = wrapped[7 : l-1]
@@ -271,9 +270,9 @@ func delete_field(msg *message.Message, fn string, fi, ai int, has_ai bool) erro
 	return nil
 }
 
-func go_lua_read_message(ptr unsafe.Pointer, c string, fi, ai int) (int, unsafe.Pointer,
+func go_tengo_read_message(ptr unsafe.Pointer, c string, fi, ai int) (int, unsafe.Pointer,
 	int) {
-	var lsb *LuaSandbox = (*LuaSandbox)(ptr)
+	var lsb *TengoSandbox = (*TengoSandbox)(ptr)
 	if lsb.pack != nil {
 		fieldName := c
 		switch fieldName {
@@ -323,7 +322,7 @@ func go_lua_read_message(ptr unsafe.Pointer, c string, fi, ai int) (int, unsafe.
 					len(lsb.pack.MsgBytes)
 			}
 		default:
-			if fn, found := extractLuaFieldName(fieldName); found {
+			if fn, found := extractTengoFieldName(fieldName); found {
 				return lookup_field(lsb.pack.Message, fn, fi, ai)
 			}
 		}
@@ -331,13 +330,13 @@ func go_lua_read_message(ptr unsafe.Pointer, c string, fi, ai int) (int, unsafe.
 	return 0, unsafe.Pointer(nil), 0
 }
 
-//export go_lua_write_message_string
-func go_lua_write_message_string(ptr unsafe.Pointer, c, v, rep string,
+//export go_tengo_write_message_string
+func go_tengo_write_message_string(ptr unsafe.Pointer, c, v, rep string,
 	fi, ai int) int {
 
-	var lsb *LuaSandbox = (*LuaSandbox)(ptr)
+	var lsb *TengoSandbox = (*TengoSandbox)(ptr)
 	if lsb.pack == nil {
-		lsb.globals.LogMessage("go_lua_write_message_string", "No sandbox pack.")
+		lsb.globals.LogMessage("go_tengo_write_message_string", "No sandbox pack.")
 		return 1
 	}
 	lsb.pack.TrustMsgBytes = false
@@ -367,7 +366,7 @@ func go_lua_write_message_string(ptr unsafe.Pointer, c, v, rep string,
 		value := v
 		var uuidBytes []byte
 		if uuidBytes = uuid.Parse(value); uuidBytes == nil {
-			lsb.globals.LogMessage("go_lua_write_message_string",
+			lsb.globals.LogMessage("go_tengo_write_message_string",
 				"Bad UUID string.")
 			return 1
 		}
@@ -377,7 +376,7 @@ func go_lua_write_message_string(ptr unsafe.Pointer, c, v, rep string,
 		vStr := v
 		// First make sure we have anything at all.
 		if vStr == "" {
-			lsb.globals.LogMessage("go_lua_write_message_string",
+			lsb.globals.LogMessage("go_tengo_write_message_string",
 				"Empty timestamp string.")
 			return 1
 		}
@@ -387,12 +386,12 @@ func go_lua_write_message_string(ptr unsafe.Pointer, c, v, rep string,
 			// If that fails, try ForgivingTimeParse string parsing. Note that
 			// ForgivingTimeParse is slow and not nearly as forgiving as the
 			// name implies, it's probably better to parse the timestamp in
-			// Lua.
+			// Tengo.
 			loc, _ := time.LoadLocation("UTC")
 			var parsedTime time.Time
 			parsedTime, err = message.ForgivingTimeParse("", vStr, loc)
 			if err != nil {
-				lsb.globals.LogMessage("go_lua_write_message_string",
+				lsb.globals.LogMessage("go_tengo_write_message_string",
 					"Can't parse timestamp string.")
 				return 1
 			}
@@ -403,7 +402,7 @@ func go_lua_write_message_string(ptr unsafe.Pointer, c, v, rep string,
 	case "Severity":
 		value, err := strconv.ParseInt(v, 0, 32)
 		if err != nil {
-			lsb.globals.LogMessage("go_lua_write_message_string",
+			lsb.globals.LogMessage("go_tengo_write_message_string",
 				"Can't parse severity value.")
 			return 1
 		}
@@ -412,33 +411,33 @@ func go_lua_write_message_string(ptr unsafe.Pointer, c, v, rep string,
 	case "Pid":
 		value, err := strconv.ParseInt(v, 0, 32)
 		if err != nil {
-			lsb.globals.LogMessage("go_lua_write_message_string",
+			lsb.globals.LogMessage("go_tengo_write_message_string",
 				"Can't parse PID value.")
 			return 1
 		}
 		lsb.pack.Message.SetPid(int32(value))
 		return 0
 	default:
-		if fn, found := extractLuaFieldName(fieldName); found {
+		if fn, found := extractTengoFieldName(fieldName); found {
 			if err := write_to_field(lsb.pack.Message, fn, v, rep, fi, ai); err != nil {
-				lsb.globals.LogMessage("go_lua_write_message_string", err.Error())
+				lsb.globals.LogMessage("go_tengo_write_message_string", err.Error())
 				return 1
 			}
 			return 0
 		}
 	}
-	lsb.globals.LogMessage("go_lua_write_message_string", "Bad field name.")
+	lsb.globals.LogMessage("go_tengo_write_message_string", "Bad field name.")
 	return 1
 }
 
-//export go_lua_write_message_double
-func go_lua_write_message_double(ptr unsafe.Pointer, c string, v float64, rep string,
+//export go_tengo_write_message_double
+func go_tengo_write_message_double(ptr unsafe.Pointer, c string, v float64, rep string,
 	fi, ai int) int {
 
 	fieldName := c
-	var lsb *LuaSandbox = (*LuaSandbox)(ptr)
+	var lsb *TengoSandbox = (*TengoSandbox)(ptr)
 	if lsb.pack == nil {
-		lsb.globals.LogMessage("go_lua_write_message_double", "No sandbox pack.")
+		lsb.globals.LogMessage("go_tengo_write_message_double", "No sandbox pack.")
 		return 1
 	}
 	lsb.pack.TrustMsgBytes = false
@@ -461,27 +460,27 @@ func go_lua_write_message_double(ptr unsafe.Pointer, c string, v float64, rep st
 		lsb.pack.Message.SetTimestamp(value)
 		return 0
 	default:
-		if fn, found := extractLuaFieldName(fieldName); found {
+		if fn, found := extractTengoFieldName(fieldName); found {
 			value := float64(v)
 			if err := write_to_field(lsb.pack.Message, fn, value, rep, fi, ai); err != nil {
-				lsb.globals.LogMessage("go_lua_write_message_double", err.Error())
+				lsb.globals.LogMessage("go_tengo_write_message_double", err.Error())
 				return 1
 			}
 			return 0
 		}
 	}
-	lsb.globals.LogMessage("go_lua_write_message_double", "Bad field name.")
+	lsb.globals.LogMessage("go_tengo_write_message_double", "Bad field name.")
 	return 1
 }
 
-//export go_lua_write_message_bool
-func go_lua_write_message_bool(ptr unsafe.Pointer, c string, v bool, rep string,
+//export go_tengo_write_message_bool
+func go_tengo_write_message_bool(ptr unsafe.Pointer, c string, v bool, rep string,
 	fi, ai int) int {
 
 	fieldName := c
-	var lsb *LuaSandbox = (*LuaSandbox)(ptr)
+	var lsb *TengoSandbox = (*TengoSandbox)(ptr)
 	if lsb.pack == nil {
-		lsb.globals.LogMessage("go_lua_write_message_bool", "No sandbox pack.")
+		lsb.globals.LogMessage("go_tengo_write_message_bool", "No sandbox pack.")
 		return 1
 	}
 	lsb.pack.TrustMsgBytes = false
@@ -490,24 +489,24 @@ func go_lua_write_message_bool(ptr unsafe.Pointer, c string, v bool, rep string,
 		lsb.messageCopied = true
 	}
 
-	if fn, found := extractLuaFieldName(fieldName); found {
+	if fn, found := extractTengoFieldName(fieldName); found {
 		if err := write_to_field(lsb.pack.Message, fn, v, rep, fi, ai); err != nil {
-			lsb.globals.LogMessage("go_lua_write_message_bool", err.Error())
+			lsb.globals.LogMessage("go_tengo_write_message_bool", err.Error())
 			return 1
 		}
 		return 0
 	}
-	lsb.globals.LogMessage("go_lua_write_message_bool", "Bad field name.")
+	lsb.globals.LogMessage("go_tengo_write_message_bool", "Bad field name.")
 	return 1
 }
 
-//export go_lua_delete_message_field
-func go_lua_delete_message_field(ptr unsafe.Pointer, c string, fi, ai int, has_ai bool) int {
+//export go_tengo_delete_message_field
+func go_tengo_delete_message_field(ptr unsafe.Pointer, c string, fi, ai int, has_ai bool) int {
 
 	fieldName := c
-	var lsb *LuaSandbox = (*LuaSandbox)(ptr)
+	var lsb *TengoSandbox = (*TengoSandbox)(ptr)
 	if lsb.pack == nil {
-		lsb.globals.LogMessage("go_lua_delete_message_field", "No sandbox pack.")
+		lsb.globals.LogMessage("go_tengo_delete_message_field", "No sandbox pack.")
 		return 1
 	}
 	lsb.pack.TrustMsgBytes = false
@@ -516,19 +515,19 @@ func go_lua_delete_message_field(ptr unsafe.Pointer, c string, fi, ai int, has_a
 		lsb.messageCopied = true
 	}
 
-	if fn, found := extractLuaFieldName(fieldName); found {
+	if fn, found := extractTengoFieldName(fieldName); found {
 		if err := delete_field(lsb.pack.Message, fn, fi, ai, has_ai); err != nil {
-			lsb.globals.LogMessage("go_lua_delete_message_field", err.Error())
+			lsb.globals.LogMessage("go_tengo_delete_message_field", err.Error())
 			return 1
 		}
 		return 0
 	}
-	lsb.globals.LogMessage("go_lua_delete_message_field", "Bad field name.")
+	lsb.globals.LogMessage("go_tengo_delete_message_field", "Bad field name.")
 	return 1
 }
 
-//export go_lua_read_next_field
-func go_lua_read_next_field(ptr unsafe.Pointer) (int, unsafe.Pointer, int,
+//export go_tengo_read_next_field
+func go_tengo_read_next_field(ptr unsafe.Pointer) (int, unsafe.Pointer, int,
 	unsafe.Pointer, int, unsafe.Pointer, int, int) {
 	var (
 		fieldType         int
@@ -542,7 +541,7 @@ func go_lua_read_next_field(ptr unsafe.Pointer) (int, unsafe.Pointer, int,
 		valueLen          int
 		fieldLen          int
 	)
-	var lsb *LuaSandbox = (*LuaSandbox)(ptr)
+	var lsb *TengoSandbox = (*TengoSandbox)(ptr)
 	if lsb.pack != nil && lsb.field < len(lsb.pack.Message.Fields) {
 		field := lsb.pack.Message.Fields[lsb.field]
 		lsb.field++
@@ -599,10 +598,10 @@ func go_lua_read_next_field(ptr unsafe.Pointer) (int, unsafe.Pointer, int,
 		representationPtr, representationLen, fieldLen
 }
 
-//export go_lua_read_config
-func go_lua_read_config(ptr unsafe.Pointer, c string) (int, unsafe.Pointer, int) {
+//export go_tengo_read_config
+func go_tengo_read_config(ptr unsafe.Pointer, c string) (int, unsafe.Pointer, int) {
 	name := c
-	var lsb *LuaSandbox = (*LuaSandbox)(ptr)
+	var lsb *TengoSandbox = (*TengoSandbox)(ptr)
 	if lsb.config == nil {
 		return 0, unsafe.Pointer(nil), 0
 	}
@@ -626,17 +625,17 @@ func go_lua_read_config(ptr unsafe.Pointer, c string) (int, unsafe.Pointer, int)
 	return 0, unsafe.Pointer(nil), 0
 }
 
-func go_lua_inject_message(ptr unsafe.Pointer, payload string,
+func go_tengo_inject_message(ptr unsafe.Pointer, payload string,
 	payload_len int, payload_type, payload_name string) int {
-	var lsb *LuaSandbox = (*LuaSandbox)(ptr)
+	var lsb *TengoSandbox = (*TengoSandbox)(ptr)
 	return lsb.injectMessage(payload[:payload_len],
 		payload_type, payload_name)
 }
 
-//todo lua pool
-type LuaSandbox struct {
-	lvm           *lua.LState
-	lcancel       context.CancelFunc
+//todo tengo pool
+type TengoSandbox struct {
+	ts           *tengo.Script
+	tcancel       context.CancelFunc
 	pack          *pipeline.PipelinePack
 	injectMessage func(payload, payload_type, payload_name string) int
 	config        map[string]interface{}
@@ -647,75 +646,34 @@ type LuaSandbox struct {
 	lerr          error
 }
 
-// 初始化lua虚拟机
-func CreateLuaSandbox(conf *sandbox.SandboxConfig) (sandbox.Sandbox, error) {
-	var (
-		lua_path, lua_cpath []string
-		template            string
-	)
-	lsb := new(LuaSandbox)
-	lsb.sbConfig = conf
-	//cs := conf.ScriptFilename
-
-	paths := strings.Split(conf.ModuleDirectory, ";")
-	for _, p := range paths {
-		lua_path = append(lua_path, filepath.Join(p, "?.lua"))
-		lua_cpath = append(lua_cpath, filepath.Join(p, "?.so"))
-	}
-
-	if conf.PluginType == "output" || conf.PluginType == "input" {
-		template = SandboxIoTemplate
-	} else {
-		template = SandboxTemplate
-	}
-	//todo 支持lua脚本的路径加载配置
-
-	cfg := fmt.Sprintf(template,
-		conf.MemoryLimit,
-		conf.InstructionLimit,
-		conf.OutputLimit,
-		strings.Join(lua_path, ";"),
-		strings.Join(lua_cpath, ";"))
-	fmt.Println(cfg)
-	lsb.lvm = lua.NewState()
-	ctx, cancel := context.WithCancel(context.Background())
-	lsb.lcancel = cancel
-	lsb.lvm.SetContext(ctx)
-	lsb.sbConfig = conf
-	lsb.lvm.SetGlobal("inject_payload", lsb.lvm.NewFunction(lsb.luaInjectMessage))
-	if lsb.lvm == nil {
-		return nil, fmt.Errorf("Sandbox creation failed")
-	}
-	lsb.injectMessage = func(p, pt, pn string) int {
-		log.Printf("payload_type: %s\npayload_name: %s\npayload: %s\n", pt, pn, p)
-		return 0
-	}
-	lsb.config = conf.Config
-	lsb.globals = conf.Globals
-	return lsb, nil
+// 初始化Tengo虚拟机
+func CreateTengoSandbox(conf *sandbox.SandboxConfig) (sandbox.Sandbox, error) {
+	//见 vm_test.go traceCompileRun
+	return nil,nil
 }
 
-func (this *LuaSandbox) Init(dataFile string) error {
+func (this *TengoSandbox) Init(dataFile string) error {
 	//todo : load data file
-	return this.lvm.DoFile(this.sbConfig.ScriptFilename)
-	//return nil
+	//return this.ts.DoFile(this.sbConfig.ScriptFilename)
+	return nil
 }
 
-func (this *LuaSandbox) Stop() {
+func (this *TengoSandbox) Stop() {
 	//todo : save data file
-	//todo : close lua state
-	//sandbox_stop(this.lvm)
-	this.lcancel()
-
+	//todo : close tengo state
+	//sandbox_stop(this.ts)
+	
+	this.tcancel()
 }
 
-func (this *LuaSandbox) Destroy(dataFile string) error {
+func (this *TengoSandbox) Destroy(dataFile string) error {
 	//todo : save data file
-	//todo : close lua state
+	//todo : close tengo state
 	//todo : hook
-	this.lvm.Close()
+	//this.ts.IsStackEmpty()
+	//s := tengo.NewScript()
 
-	//lua_sethook(lua, lstop, LUA_MASKCALL|LUA_MASKRET|LUA_MASKCOUNT, 1)
+	//tengo_sethook(tengo, lstop, LUA_MASKCALL|LUA_MASKRET|LUA_MASKCOUNT, 1)
 	return nil
 }
 
@@ -725,8 +683,8 @@ LSB_RUNNING     = 1,
 LSB_TERMINATED  = 2,
 LSB_STOP        = 3
 */
-func (this *LuaSandbox) Status() int {
-	status := this.lvm.Status(this.lvm)
+func (this *TengoSandbox) Status() int {
+	status := this.ts.Status(this.ts)
 	switch status {
 	case "running":
 		return 1
@@ -740,54 +698,32 @@ func (this *LuaSandbox) Status() int {
 	return 0
 }
 
-func (this *LuaSandbox) LastError() string {
+func (this *TengoSandbox) LastError() string {
 	if this.lerr != nil {
 		return this.lerr.Error()
 	}
 	return ""
 }
 
-func (this *LuaSandbox) Usage(utype, ustat int) uint {
+func (this *TengoSandbox) Usage(utype, ustat int) uint {
 	//todo
 	return 10
-	//return uint(lsb_usage(this.lvm, lsb_usage_type(utype),
+	//return uint(lsb_usage(this.ts, lsb_usage_type(utype),
 	//	lsb_usage_stat(ustat)))
 }
 
-func (this *LuaSandbox) ProcessMessage(pack *pipeline.PipelinePack) int {
-	this.field = 0
-	this.messageCopied = false
-	this.pack = pack
-
-	err := this.lvm.CallByParam(lua.P{
-		Fn:      this.lvm.GetGlobal("process_message"),
-		NRet:    1, //返回值数量
-		Protect: true,
-	})
-	this.pack = nil
-	if err != nil {
-		log.Printf("process_message error: %s\n", err.Error())
-		return 1
-	}
-	ret := this.lvm.Get(-1) // returned value
-	this.lvm.Pop(1)         // remove received value
-	return int(ret.(lua.LNumber))
+//调用脚本里的函数
+func (this *TengoSandbox) ProcessMessage(pack *pipeline.PipelinePack) int {
+	return 0
 }
 
-func (this *LuaSandbox) TimerEvent(ns int64) int {
-	if err := this.lvm.CallByParam(lua.P{
-		Fn:      this.lvm.GetGlobal("timer_event"),
-		NRet:    0, //返回值数量
-		Protect: true,
-	}, lua.LNumber(ns)); err != nil {
-		log.Printf("timer_event error: %s\n", err.Error())
-		return 1
-	}
+func (this *TengoSandbox) TimerEvent(ns int64) int {
+
 	return 0
 }
 
 //payload, payload_type, payload_name string
-func (this *LuaSandbox) luaInjectMessage(L *lua.LState) int {
+func (this *TengoSandbox) tengoInjectMessage(L *tengo.LState) int {
 	payload := L.ToString(1)
 	payload_type := L.ToString(2)
 	payload_name := L.ToString(3)
@@ -795,6 +731,6 @@ func (this *LuaSandbox) luaInjectMessage(L *lua.LState) int {
 	return 0
 }
 
-func (this *LuaSandbox)InjectMessage(f func(payload, payload_type, payload_name string) int)  {
+func (this *TengoSandbox)InjectMessage(f func(payload, payload_type, payload_name string) int)  {
 	//f()
 }
